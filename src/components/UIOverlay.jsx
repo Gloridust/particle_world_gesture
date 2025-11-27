@@ -1,127 +1,120 @@
-import React, { useState } from 'react';
-import { useStore } from '../store';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useStore } from '../store'
+import { Maximize, Minimize, Hand } from 'lucide-react'
+import { useState, useEffect } from 'react'
 
 const SHAPES = [
-  { id: 'universe', label: 'Universe', icon: '🌌' },
-  { id: 'starry_sky', label: 'Star Field', icon: '✨' },
-  { id: 'heart', label: 'Heart', icon: '❤️' },
-  { id: 'flower', label: 'Flower', icon: '🌸' },
-  { id: 'saturn', label: 'Saturn', icon: '🪐' },
-  { id: 'fireworks', label: 'Fireworks', icon: '🎆' },
-];
+  { id: 'universe', label: '宇宙' },
+  { id: 'heart', label: '爱心' },
+  { id: 'sphere', label: '星球' },
+  { id: 'text', label: '文字' },
+]
 
-const UIOverlay = () => {
-  const { currentShape, setShape, text, setText } = useStore();
-  const [inputText, setInputText] = useState(text);
-  const [isMenuOpen, setIsMenuOpen] = useState(true);
+export function UIOverlay() {
+  const { currentShape, setShape, inputText, setInputText, handData } = useStore()
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [showInput, setShowInput] = useState(false)
+  const [localText, setLocalText] = useState('')
 
-  const handleTextSubmit = (e) => {
-    e.preventDefault();
-    setText(inputText);
-    setShape('text');
-  };
-
-  const toggleFullScreen = () => {
+  const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
+      document.documentElement.requestFullscreen()
+      setIsFullscreen(true)
     } else {
       if (document.exitFullscreen) {
-        document.exitFullscreen();
+        document.exitFullscreen()
+        setIsFullscreen(false)
       }
     }
-  };
+  }
+
+  const handleShapeClick = (id) => {
+    setShape(id)
+    if (id === 'text') {
+      setShowInput(true)
+    } else {
+      setShowInput(false)
+    }
+  }
+
+  const handleTextSubmit = (e) => {
+    e.preventDefault()
+    setInputText(localText)
+  }
+
+  // Detect hand status
+  const hasHand = handData?.landmarks?.length > 0
+  const gestureStatus = hasHand 
+    ? (handData.landmarks.length === 2 ? '双手: 距离缩放' : '单手: 捏合缩放/移动') 
+    : '等待手势...'
 
   return (
-    <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-6 z-40">
-      
+    <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-10 flex flex-col justify-between p-6">
       {/* Header */}
       <div className="flex justify-between items-start pointer-events-auto">
-        <div className="bg-tech-panel backdrop-blur-md p-4 rounded-lg border border-tech-blue shadow-[0_0_15px_rgba(0,243,255,0.3)]">
-          <h1 className="text-2xl font-bold text-tech-blue tracking-wider">PARTICLE WORLD</h1>
-          <div className="text-xs text-gray-400 mt-1 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-            SYSTEM ONLINE
+        <div className="bg-black/40 backdrop-blur-md border border-cyan-500/30 p-4 rounded-lg text-cyan-400 font-mono text-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <Hand size={16} className={hasHand ? "text-cyan-400 animate-pulse" : "text-gray-600"} />
+            <span className={hasHand ? "text-cyan-100" : "text-gray-500"}>{gestureStatus}</span>
           </div>
+          {hasHand && (
+             <div className="text-xs text-cyan-600">
+               <div>Scale: {handData.gestures.scale.toFixed(2)}</div>
+               <div>Rot: [{handData.gestures.rotation[0].toFixed(1)}, {handData.gestures.rotation[1].toFixed(1)}]</div>
+             </div>
+          )}
         </div>
 
         <button 
-          onClick={toggleFullScreen}
-          className="bg-tech-panel backdrop-blur-md p-3 rounded-lg border border-gray-600 hover:border-tech-blue hover:text-tech-blue transition-all"
+          onClick={toggleFullscreen}
+          className="bg-black/40 backdrop-blur-md border border-cyan-500/30 p-3 rounded-full hover:bg-cyan-900/20 transition-colors text-cyan-400"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-          </svg>
+          {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
         </button>
       </div>
 
-      {/* Controls */}
-      <div className="pointer-events-auto self-center md:self-end flex flex-col gap-4 max-w-sm w-full">
-        
-        {/* Toggle Menu */}
-        <button 
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
-          className="md:hidden self-end bg-tech-panel p-2 rounded border border-tech-blue text-tech-blue"
-        >
-          {isMenuOpen ? 'Hide Controls' : 'Show Controls'}
-        </button>
+      {/* Center Text Input */}
+      {showInput && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto">
+          <form onSubmit={handleTextSubmit} className="flex gap-2">
+            <input 
+              type="text" 
+              value={localText}
+              onChange={(e) => setLocalText(e.target.value)}
+              placeholder="输入文字..."
+              className="bg-black/60 border border-cyan-500 text-cyan-100 px-4 py-2 rounded outline-none focus:ring-2 ring-cyan-400/50 font-mono"
+            />
+            <button type="submit" className="bg-cyan-600/20 border border-cyan-500 text-cyan-400 px-4 py-2 rounded hover:bg-cyan-600/40">
+              生成
+            </button>
+          </form>
+        </div>
+      )}
 
-        <AnimatePresence>
-        {isMenuOpen && (
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            className="bg-tech-panel backdrop-blur-md p-5 rounded-xl border border-gray-700 shadow-2xl"
-          >
-            <h3 className="text-sm text-gray-400 uppercase tracking-widest mb-4 border-b border-gray-700 pb-2">Holographic Projector</h3>
-            
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              {SHAPES.map((shape) => (
-                <button
-                  key={shape.id}
-                  onClick={() => setShape(shape.id)}
-                  className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all duration-300 ${
-                    currentShape === shape.id 
-                      ? 'bg-tech-blue/20 border-tech-blue text-tech-blue shadow-[0_0_10px_rgba(0,243,255,0.3)]' 
-                      : 'bg-black/40 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
-                  }`}
-                >
-                  <span className="text-2xl mb-1">{shape.icon}</span>
-                  <span className="text-[10px] font-bold">{shape.label}</span>
-                </button>
-              ))}
-            </div>
-
-            <h3 className="text-sm text-gray-400 uppercase tracking-widest mb-4 border-b border-gray-700 pb-2">Text Matrix</h3>
-            <form onSubmit={handleTextSubmit} className="flex gap-2">
-              <input 
-                type="text" 
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Enter text..."
-                maxLength={10}
-                className="flex-1 bg-black/50 border border-gray-600 rounded px-3 py-2 text-white focus:border-tech-blue focus:outline-none text-sm font-tech"
-              />
-              <button 
-                type="submit"
-                className="bg-tech-blue/20 border border-tech-blue text-tech-blue px-4 py-2 rounded hover:bg-tech-blue hover:text-black transition-colors font-bold text-sm"
-              >
-                GENERATE
-              </button>
-            </form>
-            
-            <div className="mt-6 text-[10px] text-gray-500 font-mono">
-              <p>GESTURE CONTROL ACTIVE</p>
-              <p>HAND DETECTED: <span className="text-green-500">SCANNING...</span></p>
-            </div>
-          </motion.div>
-        )}
-        </AnimatePresence>
+      {/* Footer Controls */}
+      <div className="flex justify-center gap-4 pointer-events-auto mb-8">
+        <div className="bg-black/40 backdrop-blur-md border border-cyan-500/30 p-2 rounded-xl flex gap-2">
+          {SHAPES.map(shape => (
+            <button
+              key={shape.id}
+              onClick={() => handleShapeClick(shape.id)}
+              className={`px-6 py-2 rounded-lg font-mono text-sm transition-all duration-300 ${
+                currentShape === shape.id 
+                  ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.5)]' 
+                  : 'text-cyan-400 hover:bg-cyan-900/30'
+              }`}
+            >
+              {shape.label}
+            </button>
+          ))}
+        </div>
       </div>
-
+      
+      {/* Decorative corners */}
+      <div className="absolute top-0 left-0 w-32 h-32 border-l-2 border-t-2 border-cyan-500/20 rounded-tl-3xl pointer-events-none" />
+      <div className="absolute top-0 right-0 w-32 h-32 border-r-2 border-t-2 border-cyan-500/20 rounded-tr-3xl pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-32 h-32 border-l-2 border-b-2 border-cyan-500/20 rounded-bl-3xl pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-32 h-32 border-r-2 border-b-2 border-cyan-500/20 rounded-br-3xl pointer-events-none" />
     </div>
-  );
-};
+  )
+}
 
-export default UIOverlay;

@@ -7,12 +7,8 @@ export default {
   theme: {
     extend: {
       colors: {
-        'tech-blue': '#00f3ff',
-        'tech-dark': '#0a0a0a',
-        'tech-panel': 'rgba(10, 10, 10, 0.8)',
-      },
-      fontFamily: {
-        'tech': ['Orbitron', 'sans-serif'],
+        'sci-fi-blue': '#00f3ff',
+        'sci-fi-bg': '#050510',
       }
     },
   },
