@@ -9,6 +9,8 @@ const vertexShader = `
   uniform float uMorph;
   uniform float uScale;
   uniform vec2 uRotation;
+  uniform vec3 uColor1;
+  uniform vec3 uColor2;
   
   attribute vec3 aTarget;
   attribute float aSize;
@@ -106,7 +108,7 @@ const vertexShader = `
     gl_PointSize = aSize * (20.0 / -mvPosition.z);
     
     // Color gradient
-    vColor = mix(vec3(0.2, 0.5, 1.0), vec3(1.0, 0.2, 0.5), pos.y * 0.1 + 0.5);
+    vColor = mix(uColor1, uColor2, pos.y * 0.1 + 0.5);
     vAlpha = 0.8 + noiseVal * 0.2;
   }
 `
@@ -128,7 +130,7 @@ const fragmentShader = `
   }
 `
 
-const COUNT = 15000
+const COUNT = 6000
 
 export function ParticleSystem() {
   const meshRef = useRef()
@@ -139,7 +141,9 @@ export function ParticleSystem() {
     uTime: { value: 0 },
     uMorph: { value: 0 },
     uScale: { value: 1 },
-    uRotation: { value: new THREE.Vector2(0, 0) }
+    uRotation: { value: new THREE.Vector2(0, 0) },
+    uColor1: { value: new THREE.Color(0.2, 0.5, 1.0) },
+    uColor2: { value: new THREE.Color(1.0, 0.2, 0.5) }
   }), [])
 
   // Generate initial positions (Universe)
@@ -199,6 +203,18 @@ export function ParticleSystem() {
       
       attrTarget.array.set(targetPositions)
       attrTarget.needsUpdate = true
+      
+      // Update colors based on shape
+      if (currentShape === 'ironman') {
+        uniforms.uColor1.value.set(0.0, 0.8, 1.0) // Cyan
+        uniforms.uColor2.value.set(0.0, 0.4, 1.0) // Deep Blue
+      } else if (currentShape === 'heart') {
+        uniforms.uColor1.value.set(1.0, 0.2, 0.5) // Pink
+        uniforms.uColor2.value.set(1.0, 0.0, 0.2) // Red
+      } else {
+        uniforms.uColor1.value.set(0.2, 0.5, 1.0) // Blue
+        uniforms.uColor2.value.set(1.0, 0.2, 0.5) // Pink/Red
+      }
     }
   }, [currentShape, inputText])
 
@@ -301,6 +317,41 @@ function generateShape(type, buffer, text) {
         buffer[i*3+1] = -p.y * 0.1 + 5
         buffer[i*3+2] = (Math.random() - 0.5) * 2
       }
+    }
+  } else if (type === 'ironman') {
+    // Arc Reactor Shape
+    for (let i = 0; i < count; i++) {
+      const section = Math.random()
+      let x, y, z
+      
+      if (section < 0.2) {
+        // Center core
+        const r = 2 * Math.sqrt(Math.random())
+        const theta = Math.random() * Math.PI * 2
+        x = r * Math.cos(theta)
+        y = r * Math.sin(theta)
+        z = (Math.random() - 0.5) * 1
+      } else if (section < 0.6) {
+        // Outer ring
+        const r = 6 + Math.random() * 0.5
+        const theta = Math.random() * Math.PI * 2
+        x = r * Math.cos(theta)
+        y = r * Math.sin(theta)
+        z = (Math.random() - 0.5) * 0.5
+      } else {
+        // Spokes/Tech details
+        const r = 2 + Math.random() * 4
+        // 10 main spokes
+        const spoke = Math.floor(Math.random() * 10)
+        const theta = (spoke / 10) * Math.PI * 2 + (Math.random() - 0.5) * 0.1
+        x = r * Math.cos(theta)
+        y = r * Math.sin(theta)
+        z = (Math.random() - 0.5) * 2
+      }
+      
+      buffer[i*3] = x
+      buffer[i*3+1] = y
+      buffer[i*3+2] = z
     }
   } else {
     // Fallback random

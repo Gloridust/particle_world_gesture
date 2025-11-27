@@ -4,6 +4,7 @@ import { Suspense } from 'react'
 import { UIOverlay } from './components/UIOverlay'
 import { GestureDetector } from './components/GestureDetector'
 import { ParticleSystem } from './components/ParticleSystem'
+import { HologramRings } from './components/HologramRings'
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
               <ambientLight intensity={0.5} />
               <pointLight position={[10, 10, 10]} />
               <ParticleSystem />
+              <HologramRings />
             </Suspense>
             <OrbitControls makeDefault enablePan={false} enableZoom={true} />
          </Canvas>

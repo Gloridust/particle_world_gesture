@@ -7,6 +7,7 @@ const SHAPES = [
   { id: 'heart', label: '爱心' },
   { id: 'sphere', label: '星球' },
   { id: 'text', label: '文字' },
+  { id: 'ironman', label: 'MK-85' },
 ]
 
 export function UIOverlay() {
@@ -43,9 +44,16 @@ export function UIOverlay() {
 
   // Detect hand status
   const hasHand = handData?.landmarks?.length > 0
-  const gestureStatus = hasHand 
-    ? (handData.landmarks.length === 2 ? '双手: 距离缩放' : '单手: 捏合缩放/移动') 
-    : '等待手势...'
+  
+  let gestureStatus = '等待手势...'
+  if (hasHand) {
+    if (handData.landmarks.length === 2) {
+      gestureStatus = '双手: 距离缩放 + 移动'
+    } else {
+      // Check if pinching
+      gestureStatus = handData.gestures?.isPinching ? '单手: 🤏 捏合旋转中' : '单手: ✋ 张开暂停'
+    }
+  }
 
   return (
     <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-10 flex flex-col justify-between p-6">
