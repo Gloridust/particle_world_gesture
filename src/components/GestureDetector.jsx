@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { useStore } from '../store';
 
@@ -107,10 +107,14 @@ const GestureDetector = () => {
 
     initMediaPipe();
 
+    // Capture ref value for cleanup
+    const videoElement = videoRef.current;
+
     return () => {
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
-      if (videoRef.current && videoRef.current.srcObject) {
-         const tracks = videoRef.current.srcObject.getTracks();
+      // Clean up video stream
+      if (videoElement && videoElement.srcObject) {
+         const tracks = videoElement.srcObject.getTracks();
          tracks.forEach(track => track.stop());
       }
     };

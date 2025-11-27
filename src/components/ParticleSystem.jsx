@@ -1,13 +1,13 @@
-import React, { useMemo, useRef, useEffect } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useMemo, useRef, useEffect } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStore } from '../store';
 
-const COUNT = 8000;
+const COUNT = 5000;
 const PARTICLE_SIZE = 0.05;
 
 // Helper to generate shapes
-const generateShape = (type, text = '') => {
+const generateShape = (type = '') => {
   const positions = new Float32Array(COUNT * 3);
   const colors = new Float32Array(COUNT * 3);
   
@@ -32,23 +32,6 @@ const generateShape = (type, text = '') => {
       color.setHSL(0.6, 0.8, 0.9);
     } else if (type === 'heart') {
       // Heart shape
-      // x = 16sin^3(t)
-      // y = 13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)
-      // z = random thickness
-      const t = Math.random() * 2 * Math.PI;
-      const r = Math.sqrt(Math.random()); // Even distribution
-      // Re-map t to distribute points better? simple random is okay for now
-      
-      // We need to distribute points inside the heart volume or surface
-      // Let's do surface + some noise
-      const phi = Math.random() * Math.PI * 2;
-      const theta = Math.random() * Math.PI; // Just random sphere-ish mapping but applied to heart eq?
-      
-      // Let's use simple rejection sampling or parametric surface
-      // 3D Heart: (x^2 + 9/4y^2 + z^2 - 1)^3 - x^2z^3 - 9/80y^2z^3 = 0
-      // Hard to generate random points directly.
-      
-      // Use 2D heart extruded or rotated?
       // Let's use 2D parametric and add Z depth
       const tt = Math.random() * 2 * Math.PI;
       const scale = 0.3;
@@ -63,7 +46,6 @@ const generateShape = (type, text = '') => {
       color.setHSL(0.95, 1, 0.6); // Red/Pink
     } else if (type === 'flower') {
         const u = Math.random() * 2 * Math.PI;
-        const v = Math.random() * Math.PI;
         const scale = 3;
         // Rose/Flower parametric
         const k = 5; // Petals
@@ -222,13 +204,24 @@ const ParticleSystem = () => {
     
     const { isHandDetected, position: handPos, handState } = gesture;
     
-    // Convert hand pos to world space roughly
-    // Hand pos is -1 to 1 in x, -1 to 1 in y.
-    // Camera is at z=5 usually.
-    // World space width at z=0 is approx 10 units?
-    const targetX = handPos.x * 5;
-    const targetY = handPos.y * 3;
-    const targetZ = 0;
+    // Hand rotation logic
+    if (isHandDetected) {
+       // Map hand position (-1 to 1) to rotation speed
+       // Center is 0 speed. Edges are fast spin.
+       const rotationSpeedX = handPos.y * 2 * delta; // Up/down -> Rotate X
+       const rotationSpeedY = handPos.x * 2 * delta; // Left/right -> Rotate Y
+       
+       pointsRef.current.rotation.x += rotationSpeedX;
+       pointsRef.current.rotation.y += rotationSpeedY;
+    } else {
+       // Idle rotation
+       pointsRef.current.rotation.y += 0.05 * delta;
+    }
+    
+    // Optimized Loop
+    // We only update if necessary or if shape is changing. 
+    // But since shape can change anytime, we usually keep running.
+    // However, if target reached, we can skip? No, because of noise/breathing.
     
     for (let i = 0; i < COUNT; i++) {
       const i3 = i * 3;
@@ -248,40 +241,38 @@ const ParticleSystem = () => {
       cy += (ty - cy) * smoothing;
       cz += (tz - cz) * smoothing;
       
-      // 2. Apply Gesture Interaction
+      // 2. Gesture Interaction (Scale/Diffussion only)
       if (isHandDetected) {
-         const dx = cx - targetX;
-         const dy = cy - targetY;
-         const dz = cz - targetZ;
-         const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+         // Instead of moving particles towards hand (since hand now controls rotation),
+         // we use hand state (open/closed) to scale the universe or attract to center (0,0,0)
          
+         const distToCenter = Math.sqrt(cx*cx + cy*cy + cz*cz);
+
          if (handState === 'closed') {
              // Attraction / Shrink
-             if (dist < 4) {
-                 const force = (4 - dist) * 2 * delta;
-                 cx -= dx * force;
-                 cy -= dy * force;
-                 cz -= dz * force;
+             // Pull everything to center
+             if (distToCenter > 0.5) {
+                 cx *= 0.98;
+                 cy *= 0.98;
+                 cz *= 0.98;
              }
          } else {
-             // Repulsion / Diffusion / Wave
-             // If open hand, maybe repel slightly or follow?
-             // Requirement: "zoom and diffusion"
-             // Let's say open hand = diffuse/repel
-             if (dist < 2.5) {
-                 const force = (2.5 - dist) * 5 * delta;
-                 cx += dx * force;
-                 cy += dy * force;
-                 cz += dz * force;
+             // Repulsion / Expansion
+             // Push outwards slightly
+             if (distToCenter < 8) {
+                 cx *= 1.02;
+                 cy *= 1.02;
+                 cz *= 1.02;
              }
          }
       } else {
           // Inertia / Gravity / Breathing
           // Add subtle noise movement
           const time = state.clock.elapsedTime;
-          cx += Math.sin(time + cx) * 0.002;
-          cy += Math.cos(time + cy) * 0.002;
-          cz += Math.sin(time + cz) * 0.002;
+          // Simple noise to save perf
+          cx += Math.sin(time + cx * 0.5) * 0.002;
+          cy += Math.cos(time + cy * 0.5) * 0.002;
+          cz += Math.sin(time + cz * 0.5) * 0.002;
       }
 
       positions[i3] = cx;
@@ -296,11 +287,6 @@ const ParticleSystem = () => {
     
     pointsRef.current.geometry.attributes.position.needsUpdate = true;
     pointsRef.current.geometry.attributes.color.needsUpdate = true;
-    
-    // Rotate entire system slowly
-    if (!isHandDetected) {
-        pointsRef.current.rotation.y += 0.05 * delta;
-    }
   });
 
   return (
