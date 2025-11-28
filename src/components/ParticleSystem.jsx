@@ -130,7 +130,7 @@ const fragmentShader = `
   }
 `
 
-const COUNT = 6000
+const COUNT = 3000
 
 export function ParticleSystem() {
   const meshRef = useRef()
