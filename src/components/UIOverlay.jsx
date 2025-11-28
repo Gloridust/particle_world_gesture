@@ -48,7 +48,7 @@ export function UIOverlay() {
   let gestureStatus = '等待手势...'
   if (hasHand) {
     if (handData.landmarks.length === 2) {
-      gestureStatus = '双手: 距离缩放 + 移动'
+      gestureStatus = handData.gestures?.isPinching ? '双手: 🤏 捏合操控中' : '双手: ✋ 张开暂停'
     } else {
       // Check if pinching
       gestureStatus = handData.gestures?.isPinching ? '单手: 🤏 捏合旋转中' : '单手: ✋ 张开暂停'

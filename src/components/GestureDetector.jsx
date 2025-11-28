@@ -9,11 +9,17 @@ export function GestureDetector() {
   const { setHandData } = useStore()
   const lastVideoTimeRef = useRef(-1)
   
-  // Smoothing state
-  const smoothedState = useRef({
+  // Persistent Interaction State (Incremental)
+  const interactionState = useRef({
     scale: 1,
-    rotation: [0, 0],
-    center: [0, 0]
+    rotation: [0, 0]
+  })
+
+  // Previous frame data for delta calculation
+  const prevFrameData = useRef({
+    dist: null,
+    center: null,
+    isPinching: false
   })
 
   useEffect(() => {
@@ -69,13 +75,9 @@ export function GestureDetector() {
       return
     }
 
-    // Throttle detection to ~30 FPS to save performance
+    // Throttle detection to ~30 FPS
     const now = performance.now()
-    // if (now - lastPredictionTimeRef.current < 33) {
-    //   requestRef.current = requestAnimationFrame(predictWebcam)
-    //   return
-    // }
-    // lastPredictionTimeRef.current = now
+    // if (now - lastPredictionTimeRef.current < 33) { ... }
 
     try {
       if (lastVideoTimeRef.current !== videoRef.current.currentTime) {
@@ -84,36 +86,28 @@ export function GestureDetector() {
         const result = landmarkerRef.current.detectForVideo(videoRef.current, startTime)
         
         if (result.landmarks) {
-          // Analyze gestures
-          const rawGestures = analyzeGestures(result.landmarks)
+          // Calculate deltas and update state
+          processGestures(result.landmarks)
           
-          // Apply Smoothing (Exponential Moving Average)
-          // Alpha 0.1 = very smooth, 0.5 = responsive
-          const alpha = 0.15 
-          const curr = smoothedState.current
-  
-          // Simple Lerp function
-          const lerp = (start, end, t) => start * (1 - t) + end * t
-  
-          curr.scale = lerp(curr.scale, rawGestures.scale, alpha)
-          curr.rotation[0] = lerp(curr.rotation[0], rawGestures.rotation[0], alpha)
-          curr.rotation[1] = lerp(curr.rotation[1], rawGestures.rotation[1], alpha)
-          curr.center[0] = lerp(curr.center[0], rawGestures.center[0], alpha)
-          curr.center[1] = lerp(curr.center[1], rawGestures.center[1], alpha)
-  
           setHandData({ 
             landmarks: result.landmarks,
             gestures: {
-              scale: curr.scale,
-              rotation: [...curr.rotation],
-              center: [...curr.center],
-              isPinching: rawGestures.isPinching // Pass pinch state
+              scale: interactionState.current.scale,
+              rotation: [...interactionState.current.rotation],
+              isPinching: prevFrameData.current.isPinching
             }
           })
         } else {
-          setHandData({ 
+           // No hands: Reset previous data to avoid huge jumps when hands reappear
+           prevFrameData.current = { dist: null, center: null, isPinching: false }
+           
+           setHandData({ 
             landmarks: [], 
-            gestures: smoothedState.current 
+            gestures: {
+              scale: interactionState.current.scale,
+              rotation: [...interactionState.current.rotation],
+              isPinching: false
+            }
           })
         }
       }
@@ -124,82 +118,96 @@ export function GestureDetector() {
     requestRef.current = requestAnimationFrame(predictWebcam)
   }
 
-  // Simple gesture analysis logic
-  const analyzeGestures = (landmarks) => {
-    // Use the previous smoothed rotation as the default to prevent snapping back to 0
-    // when gestures are not active
-    const defaultRotation = smoothedState.current ? smoothedState.current.rotation : [0, 0]
+  const processGestures = (landmarks) => {
+    const state = interactionState.current
+    const prev = prevFrameData.current
     
-    if (!landmarks || landmarks.length === 0) return { scale: 1, rotation: defaultRotation }
+    let isPinching = false
+    let currentDist = null
+    let currentCenter = null
 
-    const gestures = {
-      scale: smoothedState.current.scale, // Default to current smoothed scale
-      rotation: defaultRotation, // Default to current smoothed rotation
-      center: [0, 0],
-      isPinching: false
-    }
-
-    // Calculate average center (still needed for some logic, though maybe less for rotation now)
-    let cx = 0, cy = 0
-    landmarks.forEach(hand => {
-      hand.forEach(point => {
-        cx += point.x
-        cy += point.y
-      })
-    })
-    const totalPoints = landmarks.length * 21
-    gestures.center = [cx / totalPoints, cy / totalPoints]
-
-    // If two hands, calculate distance for scaling
-    if (landmarks.length === 2) {
-      const hand1 = landmarks[0][0] // Wrist
-      const hand2 = landmarks[1][0] // Wrist
-      
-      // Calculate 3D distance (approximate)
-      const dx = hand1.x - hand2.x
-      const dy = hand1.y - hand2.y
-      const dist = Math.sqrt(dx*dx + dy*dy)
-      
-      // Normalize distance (0.2 to 0.8 is typical range)
-      gestures.scale = 1 + (dist - 0.5) * 2
-      
-      // Double hand rotation (optional: can keep rotation active for 2 hands or not)
-      // For now, let's say rotation is only single hand pinch-drag, 
-      // or maybe double hand movement rotates too? 
-      // Let's keep double hand rotation for now based on center movement
-      gestures.rotation = [
-        (gestures.center[1] - 0.5) * 3, 
-        -(gestures.center[0] - 0.5) * 3 
-      ]
-      gestures.isPinching = true // Treat 2 hands as active interaction
-
-    } else if (landmarks.length === 1) {
-      const hand = landmarks[0]
+    // Helper: Pinch distance
+    const getPinchDist = (hand) => {
       const thumb = hand[4]
       const index = hand[8]
-      
-      const dx = thumb.x - index.x
-      const dy = thumb.y - index.y
-      const dist = Math.sqrt(dx*dx + dy*dy)
-      
-      // Pinch Detection Threshold
-      // Increased threshold to make it easier to trigger
-      const isPinching = dist < 0.12
-      gestures.isPinching = isPinching
-
-      if (isPinching) {
-        // PINCH DETECTED: Enable Rotation/Drag
-        // Map X/Y position to rotation
-        // Removed negative signs to fix inverted control direction
-        gestures.rotation = [
-          (gestures.center[1] - 0.5) * 3, 
-          -(gestures.center[0] - 0.5) * 3 
-        ]
-      } 
-      // Else: rotation remains defaultRotation (holding state)
+      return Math.sqrt(Math.pow(thumb.x - index.x, 2) + Math.pow(thumb.y - index.y, 2))
     }
 
-    return gestures
+    // 1. Two Hands Logic
+    if (landmarks.length === 2) {
+      const h1 = landmarks[0]
+      const h2 = landmarks[1]
+      
+      const isH1Pinching = getPinchDist(h1) < 0.12
+      const isH2Pinching = getPinchDist(h2) < 0.12
+      
+      // Only activate if BOTH hands are pinching
+      if (isH1Pinching && isH2Pinching) {
+        isPinching = true
+        
+        // Calculate Wrist Distance for Scale
+        const h1Wrist = h1[0]
+        const h2Wrist = h2[0]
+        const dx = h1Wrist.x - h2Wrist.x
+        const dy = h1Wrist.y - h2Wrist.y
+        currentDist = Math.sqrt(dx*dx + dy*dy)
+        
+        // Calculate Center for Rotation
+        currentCenter = [
+           (h1Wrist.x + h2Wrist.x) / 2,
+           (h1Wrist.y + h2Wrist.y) / 2
+        ]
+
+        // Apply Scale Delta
+        // Only if we had a valid previous distance AND we were pinching previously
+        if (prev.dist && prev.isPinching && prev.center) {
+          // Scale
+          const scaleFactor = currentDist / prev.dist
+          // Limit extreme jumps
+          if (scaleFactor > 0.8 && scaleFactor < 1.2) {
+             state.scale *= scaleFactor
+          }
+
+          // Rotation (Movement Delta)
+          // Map movement delta to rotation
+          const deltaX = currentCenter[0] - prev.center[0]
+          const deltaY = currentCenter[1] - prev.center[1]
+          
+          // Sensitivity
+          const rotSensitivity = 4.0
+          state.rotation[0] += deltaY * rotSensitivity // Up/Down movement -> X rotation
+          state.rotation[1] -= deltaX * rotSensitivity // Left/Right movement -> Y rotation
+        }
+      }
+    } 
+    // 2. Single Hand Logic
+    else if (landmarks.length === 1) {
+      const hand = landmarks[0]
+      if (getPinchDist(hand) < 0.12) {
+        isPinching = true
+        
+        const wrist = hand[0]
+        currentCenter = [wrist.x, wrist.y]
+        
+        // Apply Rotation Delta (No Scale)
+        if (prev.isPinching && prev.center) {
+           const deltaX = currentCenter[0] - prev.center[0]
+           const deltaY = currentCenter[1] - prev.center[1]
+           
+           const rotSensitivity = 4.0
+           state.rotation[0] += deltaY * rotSensitivity
+           state.rotation[1] -= deltaX * rotSensitivity
+        }
+      }
+    }
+
+    // Update previous frame data
+    prev.dist = currentDist
+    prev.center = currentCenter
+    prev.isPinching = isPinching
+    
+    // Clamp scale
+    state.scale = Math.max(0.1, Math.min(state.scale, 5.0))
   }
 
   return (
@@ -212,4 +220,3 @@ export function GestureDetector() {
     />
   )
 }
-
