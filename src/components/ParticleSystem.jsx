@@ -228,10 +228,12 @@ export function ParticleSystem() {
       // Hand Interaction
       if (handData && handData.gestures) {
         const { scale, rotation } = handData.gestures
-        // Smoothly interpolate gestures
-        uniforms.uScale.value = THREE.MathUtils.lerp(uniforms.uScale.value, scale || 1, delta * 5)
-        uniforms.uRotation.value.x = THREE.MathUtils.lerp(uniforms.uRotation.value.x, rotation?.[0] || 0, delta * 5)
-        uniforms.uRotation.value.y = THREE.MathUtils.lerp(uniforms.uRotation.value.y, rotation?.[1] || 0, delta * 5)
+        // Smoothly interpolate gestures - Reduced factor for smoother, heavier feel
+        // Lower value = more lag/smoothness (heavier). Higher = more responsive (snappier)
+        const smoothFactor = 3.5
+        uniforms.uScale.value = THREE.MathUtils.lerp(uniforms.uScale.value, scale || 1, delta * smoothFactor)
+        uniforms.uRotation.value.x = THREE.MathUtils.lerp(uniforms.uRotation.value.x, rotation?.[0] || 0, delta * smoothFactor)
+        uniforms.uRotation.value.y = THREE.MathUtils.lerp(uniforms.uRotation.value.y, rotation?.[1] || 0, delta * smoothFactor)
       }
     }
   })
@@ -391,4 +393,3 @@ function getTextPoints(text) {
   }
   return points
 }
-

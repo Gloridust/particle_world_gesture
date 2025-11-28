@@ -176,7 +176,7 @@ export function GestureDetector() {
           // Sensitivity
           const rotSensitivity = 4.0
           state.rotation[0] += deltaY * rotSensitivity // Up/Down movement -> X rotation
-          state.rotation[1] -= deltaX * rotSensitivity // Left/Right movement -> Y rotation
+          state.rotation[1] -= deltaX * rotSensitivity // Left/Right movement -> Y rotation (Mirror corrected)
         }
       }
     } 
